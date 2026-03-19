@@ -1,0 +1,10 @@
+ttkbootstrap
+openai
+grpcio
+protobuf
+yandex-cloud
+chardet
+google-generativeai
+requests
+SpeechRecognition
+pydub
