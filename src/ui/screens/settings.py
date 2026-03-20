@@ -280,6 +280,10 @@ class SettingsScreen(BaseScreen):
 
         def _worker():
             try:
+                # WARNING: shell=True is used here because yc CLI requires shell
+                # environment on Windows. Commands are hardcoded strings (not user
+                # input), so shell injection risk is minimal. Do NOT pass unsanitized
+                # user input to these calls.
                 folder_id = subprocess.check_output(
                     "yc config get folder-id", shell=True,
                 ).decode().strip()
@@ -301,6 +305,7 @@ class SettingsScreen(BaseScreen):
                     ))
                     return
 
+                # sa_id comes from yc CLI JSON output (UUID format), not user input
                 key_data = subprocess.check_output(
                     f"yc iam api-key create --service-account-id {sa_id} --format json",
                     shell=True,
