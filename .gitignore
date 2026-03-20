@@ -1,9 +1,37 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment / secrets
 .env
+config.json
+
+# Project working directories
 books/
 chapters/
 output/
 test_samples/
 test_clarity/
+
+# Logs
 *.log
