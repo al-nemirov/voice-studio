@@ -59,7 +59,7 @@ Alexander, Kirill, Alena, Dasha, Marina, Lera, Amira, Madi, Nigora, Lea, Naomi, 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/voice-studio.git
+   git clone https://github.com/al-nemirov/voice-studio.git
    cd voice-studio
    ```
 
@@ -176,7 +176,7 @@ voice-studio/
 
 1. **Клонируйте репозиторий:**
    ```bash
-   git clone https://github.com/your-username/voice-studio.git
+   git clone https://github.com/al-nemirov/voice-studio.git
    cd voice-studio
    ```
 
