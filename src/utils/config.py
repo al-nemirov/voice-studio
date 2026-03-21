@@ -5,12 +5,47 @@ Voice Studio - Конфигурация
 """
 
 import json
+import logging
+import os
 import threading
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_PATH = ROOT_DIR / "config.json"
+
+# Маппинг ключей конфига → переменных окружения
+_ENV_KEY_MAP = {
+    "yandex_api_key": "YANDEX_SPEECHKIT_KEY",
+    "deepseek_api_key": "DEEPSEEK_API_KEY",
+    "yandex_folder_id": "YANDEX_FOLDER_ID",
+}
+
+
+def get_api_key(name: str, config_value: str = "") -> str:
+    """Возвращает API-ключ: сначала из переменной окружения, затем из конфига.
+
+    Args:
+        name: Имя ключа в конфиге (например, ``"yandex_api_key"``).
+        config_value: Значение из config.json (fallback).
+
+    Returns:
+        Строка с ключом или пустая строка, если не найден.
+    """
+    env_var = _ENV_KEY_MAP.get(name, "")
+    if env_var:
+        env_value = os.environ.get(env_var, "")
+        if env_value:
+            return env_value
+    if config_value:
+        logger.warning(
+            "API-ключ '%s' читается из config.json — "
+            "рекомендуется задать через переменную окружения %s",
+            name, env_var or name.upper(),
+        )
+        return config_value
+    return ""
 
 # Голоса Yandex SpeechKit (id → {gender, roles})
 YANDEX_VOICES = {
@@ -58,7 +93,17 @@ class ConfigManager:
             if CONFIG_PATH.exists():
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                     self._data = json.load(f)
-        except Exception:
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "config.json повреждён (JSONDecodeError: %s) — "
+                "используются настройки по умолчанию", e,
+            )
+            self._data = {}
+        except OSError as e:
+            logger.warning(
+                "Не удалось прочитать config.json (%s) — "
+                "используются настройки по умолчанию", e,
+            )
             self._data = {}
         # Дополняем дефолтами
         for k, v in DEFAULTS.items():
@@ -79,7 +124,8 @@ class ConfigManager:
                     json.dump(self._data, f, ensure_ascii=False, indent=4)
                 tmp.replace(CONFIG_PATH)
                 return True
-            except Exception:
+            except OSError as e:
+                logger.error("Не удалось сохранить config.json: %s", e)
                 return False
 
     def get_voice_roles(self, voice: str) -> list:

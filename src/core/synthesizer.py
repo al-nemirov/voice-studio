@@ -4,12 +4,20 @@ Voice Studio - Синтез аудио через Yandex SpeechKit (Шаг 3)
 gRPC API v3, streaming MP3.
 """
 
+import logging
 import os
 import re
 import time
 import grpc
 import yandex.cloud.ai.tts.v3.tts_pb2 as tts_pb2
 import yandex.cloud.ai.tts.v3.tts_service_pb2_grpc as tts_service_pb2_grpc
+
+logger = logging.getLogger(__name__)
+
+# Настройки retry
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2  # секунды, экспоненциально: 2, 4, 8
+_GRPC_TIMEOUT = 60  # секунды на один gRPC-вызов
 
 
 def _sanitize_for_tts(text: str) -> str:
@@ -151,8 +159,8 @@ class YandexTTSConnection:
     def close(self):
         try:
             self.channel.close()
-        except Exception:
-            pass
+        except grpc.RpcError as e:
+            logger.warning("Ошибка закрытия gRPC-канала: %s", e)
 
 
 def synthesize_chapter(
@@ -238,10 +246,32 @@ def synthesize_chapter(
                     unsafe_mode=use_unsafe,
                 )
 
-                for response in connection.stub.UtteranceSynthesis(
-                    request, metadata=connection.metadata,
-                ):
-                    f_out.write(response.audio_chunk.data)
+                # Retry с экспоненциальной задержкой для транзиентных ошибок
+                last_err = None
+                for attempt in range(_MAX_RETRIES):
+                    try:
+                        for response in connection.stub.UtteranceSynthesis(
+                            request, metadata=connection.metadata,
+                            timeout=_GRPC_TIMEOUT,
+                        ):
+                            f_out.write(response.audio_chunk.data)
+                        last_err = None
+                        break
+                    except grpc.RpcError as e:
+                        last_err = e
+                        code = e.code() if hasattr(e, 'code') else None
+                        if code in (grpc.StatusCode.UNAVAILABLE,
+                                    grpc.StatusCode.DEADLINE_EXCEEDED,
+                                    grpc.StatusCode.RESOURCE_EXHAUSTED):
+                            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                            log(f"gRPC ошибка (попытка {attempt + 1}/{_MAX_RETRIES}), "
+                                f"повтор через {delay}с: {e}", "warning")
+                            logger.warning("gRPC retry %d/%d: %s", attempt + 1, _MAX_RETRIES, e)
+                            time.sleep(delay)
+                        else:
+                            raise
+                if last_err is not None:
+                    raise last_err
 
                 if len(text_parts) > 1:
                     time.sleep(0.15)
@@ -253,12 +283,13 @@ def synthesize_chapter(
 
     except Exception as e:
         log(f"Ошибка синтеза: {e}", "error")
+        logger.error("Ошибка синтеза %s: %s", mp3_path, e)
         # Удаляем битый файл
         if os.path.exists(mp3_path):
             try:
                 os.remove(mp3_path)
-            except Exception:
-                pass
+            except OSError as rm_err:
+                logger.warning("Не удалось удалить битый файл %s: %s", mp3_path, rm_err)
         return False
 
     finally:

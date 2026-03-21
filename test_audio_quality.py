@@ -134,11 +134,33 @@ def recognize_audio(api_key, folder_id, mp3_path):
     with open(mp3_path, "rb") as f:
         data = f.read()
 
-    resp = requests.post(url, params=params, headers=headers, data=data)
-    if resp.status_code == 200:
-        return resp.json().get("result", "")
-    else:
-        return f"[ОШИБКА STT {resp.status_code}: {resp.text[:200]}]"
+    max_retries = 3
+    retry_base_delay = 2
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(url, params=params, headers=headers, data=data, timeout=60)
+            if resp.status_code == 200:
+                return resp.json().get("result", "")
+            elif resp.status_code >= 500:
+                last_error = f"STT {resp.status_code}: {resp.text[:200]}"
+                delay = retry_base_delay * (2 ** attempt)
+                print(f"    STT сервер ошибка (попытка {attempt + 1}/{max_retries}), повтор через {delay}с")
+                time.sleep(delay)
+                continue
+            else:
+                return f"[ОШИБКА STT {resp.status_code}: {resp.text[:200]}]"
+        except requests.exceptions.Timeout:
+            last_error = "таймаут"
+            delay = retry_base_delay * (2 ** attempt)
+            print(f"    STT таймаут (попытка {attempt + 1}/{max_retries}), повтор через {delay}с")
+            time.sleep(delay)
+        except requests.exceptions.ConnectionError as e:
+            last_error = str(e)
+            delay = retry_base_delay * (2 ** attempt)
+            print(f"    STT ошибка соединения (попытка {attempt + 1}/{max_retries}), повтор через {delay}с")
+            time.sleep(delay)
+    return f"[ОШИБКА STT: {last_error}]"
 
 
 def main():

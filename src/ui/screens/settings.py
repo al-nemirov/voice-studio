@@ -280,16 +280,12 @@ class SettingsScreen(BaseScreen):
 
         def _worker():
             try:
-                # WARNING: shell=True is used here because yc CLI requires shell
-                # environment on Windows. Commands are hardcoded strings (not user
-                # input), so shell injection risk is minimal. Do NOT pass unsanitized
-                # user input to these calls.
                 folder_id = subprocess.check_output(
-                    "yc config get folder-id", shell=True,
+                    ["yc", "config", "get", "folder-id"],
                 ).decode().strip()
 
                 sa_list = subprocess.check_output(
-                    "yc iam service-account list --format json", shell=True,
+                    ["yc", "iam", "service-account", "list", "--format", "json"],
                 ).decode()
                 accounts = json.loads(sa_list)
 
@@ -305,10 +301,9 @@ class SettingsScreen(BaseScreen):
                     ))
                     return
 
-                # sa_id comes from yc CLI JSON output (UUID format), not user input
                 key_data = subprocess.check_output(
-                    f"yc iam api-key create --service-account-id {sa_id} --format json",
-                    shell=True,
+                    ["yc", "iam", "api-key", "create",
+                     "--service-account-id", sa_id, "--format", "json"],
                 ).decode()
                 api_key = json.loads(key_data)["secret"]
 

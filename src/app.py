@@ -185,8 +185,8 @@ class VoiceStudioApp:
         if self.current_screen:
             try:
                 self.current_screen.hide()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.getLogger(__name__).debug("Ошибка скрытия экрана при закрытии: %s", e)
         self.root.destroy()
 
     def run(self):
@@ -199,5 +199,5 @@ class VoiceStudioApp:
         finally:
             try:
                 self._on_closing()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.getLogger(__name__).debug("Ошибка при финальном закрытии: %s", e)

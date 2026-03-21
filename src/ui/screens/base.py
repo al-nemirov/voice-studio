@@ -1,5 +1,9 @@
+import logging
+import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+
+logger = logging.getLogger(__name__)
 
 
 class BaseScreen:
@@ -38,8 +42,8 @@ class BaseScreen:
 
         try:
             self._on_show(**kwargs)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Ошибка в _on_show(%s): %s", self.__class__.__name__, e)
 
         self.frame.tkraise()
         self.frame.update_idletasks()
@@ -48,8 +52,8 @@ class BaseScreen:
         if self._initialized:
             try:
                 self._on_hide()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Ошибка в _on_hide(%s): %s", self.__class__.__name__, e)
             self.frame.pack_forget()
 
     def destroy(self):
@@ -106,8 +110,8 @@ class BaseScreen:
                 root = text_widget.winfo_toplevel()
                 root.clipboard_clear()
                 root.clipboard_append(sel)
-            except Exception:
-                pass
+            except tk.TclError:
+                pass  # Нет выделения — это нормально
 
         def _copy_all():
             content = text_widget.get("1.0", "end-1c")
@@ -120,8 +124,8 @@ class BaseScreen:
             try:
                 text_widget.get("sel.first", "sel.last")
                 m.add_command(label="Копировать выделенное", command=_copy_sel)
-            except Exception:
-                pass
+            except tk.TclError:
+                pass  # Нет выделения — пункт не добавляется
             m.add_command(label="Копировать всё", command=_copy_all)
             m.post(event.x_root, event.y_root)
 

@@ -6,6 +6,7 @@ Layout: [Очередь | Лог] + прогрессбар внизу.
 """
 
 import glob
+import logging
 import os
 import queue
 import shutil
@@ -20,7 +21,7 @@ from ttkbootstrap.constants import *
 
 from src.ui.screens.base import BaseScreen
 from src.ui.theme import FONT_FAMILY, FONT_FAMILY_MONO, COLORS
-from src.utils.config import get_config, ROOT_DIR
+from src.utils.config import get_config, get_api_key, ROOT_DIR
 
 
 class BatchScreen(BaseScreen):
@@ -268,8 +269,8 @@ class BatchScreen(BaseScreen):
         try:
             name = self.queue_tree.item(path, "values")[0]
             self.queue_tree.item(path, values=(name, status), tags=(tag,))
-        except Exception:
-            pass
+        except (tk.TclError, IndexError) as e:
+            logging.getLogger(__name__).debug("Ошибка обновления статуса в treeview: %s", e)
 
         if not self._is_running:
             has_marked = any(b["status"] == "размечено" for b in self._books)
@@ -328,9 +329,9 @@ class BatchScreen(BaseScreen):
             return
 
         config = get_config()
-        ds_key = config.get("deepseek_api_key", "")
-        ya_key = config.get("yandex_api_key", "")
-        ya_folder = config.get("yandex_folder_id", "")
+        ds_key = get_api_key("deepseek_api_key", config.get("deepseek_api_key", ""))
+        ya_key = get_api_key("yandex_api_key", config.get("yandex_api_key", ""))
+        ya_folder = get_api_key("yandex_folder_id", config.get("yandex_folder_id", ""))
 
         if not ds_key:
             self._log_immediate(
@@ -388,8 +389,8 @@ class BatchScreen(BaseScreen):
             return
 
         config = get_config()
-        ya_key = config.get("yandex_api_key", "")
-        ya_folder = config.get("yandex_folder_id", "")
+        ya_key = get_api_key("yandex_api_key", config.get("yandex_api_key", ""))
+        ya_folder = get_api_key("yandex_folder_id", config.get("yandex_folder_id", ""))
         if not ya_key or not ya_folder:
             self._log_immediate(
                 "Не указаны Yandex API-ключ или Folder ID! Перейдите в Настройки.",
@@ -478,10 +479,10 @@ class BatchScreen(BaseScreen):
         from src.core.synthesizer import synthesize_chapter, YandexTTSConnection
 
         config = get_config()
-        ds_key = config.get("deepseek_api_key")
+        ds_key = get_api_key("deepseek_api_key", config.get("deepseek_api_key", ""))
         ds_model = config.get("deepseek_model", "deepseek-chat")
-        ya_key = config.get("yandex_api_key")
-        ya_folder = config.get("yandex_folder_id")
+        ya_key = get_api_key("yandex_api_key", config.get("yandex_api_key", ""))
+        ya_folder = get_api_key("yandex_folder_id", config.get("yandex_folder_id", ""))
         voice = config.get("voice", "kirill")
         speed = config.get("speed", 1.0)
         role = config.get("role", "neutral")
@@ -679,8 +680,8 @@ class BatchScreen(BaseScreen):
         from src.core.synthesizer import synthesize_chapter, YandexTTSConnection
 
         config = get_config()
-        ya_key = config.get("yandex_api_key")
-        ya_folder = config.get("yandex_folder_id")
+        ya_key = get_api_key("yandex_api_key", config.get("yandex_api_key", ""))
+        ya_folder = get_api_key("yandex_folder_id", config.get("yandex_folder_id", ""))
         voice = config.get("voice", "kirill")
         speed = config.get("speed", 1.0)
         role = config.get("role", "neutral")
@@ -768,8 +769,8 @@ class BatchScreen(BaseScreen):
                         with open(marked_file, "r", encoding="utf-8") as f:
                             text_len = len(f.read())
                         self._log(f"  Текст: {text_len:,} символов", "info")
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        self._log(f"  Не удалось прочитать размер текста: {e}", "warning")
 
                     self._update_progress(
                         book_idx, total_books,

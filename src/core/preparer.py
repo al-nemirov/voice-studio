@@ -4,11 +4,18 @@ Voice Studio - TTS-разметка через DeepSeek (Шаг 2)
 Добавляет ударения, паузы и акценты для Yandex SpeechKit.
 """
 
+import logging
 import os
 import re
 import time
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError, APIConnectionError
 from src.core.text_cleaner import _MANUAL_TITLES, clean_text
+
+logger = logging.getLogger(__name__)
+
+# Настройки retry
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2  # секунды, экспоненциально: 2, 4, 8
 
 
 SYSTEM_PROMPT = """Ты — эксперт по TTS-разметке для Yandex SpeechKit.
@@ -214,7 +221,7 @@ def markup_chapter(
         return True
 
     # Обработка через DeepSeek
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=120)
 
     paragraphs = [p for p in content.split('\n') if p.strip()]
     current_chunk = ""
@@ -249,28 +256,45 @@ def markup_chapter(
 
 
 def _call_deepseek(client: OpenAI, model: str, text: str, log=None) -> str:
-    """Вызов DeepSeek API для разметки текста."""
+    """Вызов DeepSeek API для разметки текста с retry и таймаутом."""
     if not text.strip():
         return ""
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Разметь этот текст:\n\n{text}"},
-            ],
-            temperature=0.2,
-            max_tokens=8000,
-        )
-        result = response.choices[0].message.content
-        result = _clean_response(result)
-        result = _verify_text_integrity(text, result, log)
-        return result
-    except Exception as e:
-        if log:
-            log(f"  DeepSeek API ошибка: {e}", "error")
-        return text
+    last_error = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Разметь этот текст:\n\n{text}"},
+                ],
+                temperature=0.2,
+                max_tokens=8000,
+                timeout=120,
+            )
+            result = response.choices[0].message.content
+            result = _clean_response(result)
+            result = _verify_text_integrity(text, result, log)
+            return result
+        except (APITimeoutError, APIConnectionError) as e:
+            last_error = e
+            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            if log:
+                log(f"  DeepSeek API таймаут/сеть (попытка {attempt + 1}/{_MAX_RETRIES}), "
+                    f"повтор через {delay}с: {e}", "warning")
+            logger.warning("DeepSeek retry %d/%d: %s", attempt + 1, _MAX_RETRIES, e)
+            time.sleep(delay)
+        except Exception as e:
+            if log:
+                log(f"  DeepSeek API ошибка: {e}", "error")
+            logger.error("DeepSeek API ошибка: %s", e)
+            return text
+
+    if log:
+        log(f"  DeepSeek API: все {_MAX_RETRIES} попытки исчерпаны, "
+            f"возврат оригинала: {last_error}", "error")
+    return text
 
 
 def _strip_tts_markup(text: str) -> str:
