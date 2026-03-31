@@ -96,6 +96,8 @@ def stt(mp3_path):
 def word_accuracy(stt_text, ref_words):
     stt_lower = stt_text.lower()
     found = sum(1 for w in ref_words if w in stt_lower)
+    if not ref_words:
+        return 0, 0, 0
     return found, len(ref_words), round(found / len(ref_words) * 100)
 
 
